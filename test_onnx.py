@@ -32,7 +32,7 @@ if __name__ == '__main__':
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     class_prototypes = compute_class_prototypes(session, dataloader, device)
     
-    df = pd.read_csv('测试集列表.csv')
+    df = pd.read_csv('测试集列表.csv', header=None)
     test_set : list[list[str]] = df.values.tolist()
     datasetTest = MyDataset([x for row in test_set for x in row], transform=transform)
 
