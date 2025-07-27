@@ -23,7 +23,7 @@ if __name__ == '__main__':
     batch_size = len(dataset)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-    num_epochs = 100
+    num_epochs = 150
 
     # 初始化模型、损失函数和优化器
     model = PrototypicalNetwork()
@@ -87,8 +87,8 @@ if __name__ == '__main__':
 
         # print(f'Prefix lambda: {model.prefix_lambda.item()}, Star lambda: {model.star_lambda.item()}')
         print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {running_loss / len(dataloader):.4f}, Lr: {optimizer.param_groups[0]['lr']:.6f}")
-        if running_loss < 1e-3:
-            print('哇塞！是千分之一loss！')
+        if running_loss < 1e-2:
+            print('哇塞！是百分之一loss！应该可以了')
             break
 
 
