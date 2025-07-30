@@ -95,7 +95,7 @@ if __name__ == '__main__':
     with torch.no_grad():
         last = {
             "model_state_dict": model.state_dict(),
-            "label_prefix_dict": dataset.label_prefix_dict
+            "prefix_list": list(dataset.label_prefix_dict.values())
         }
         torch.save(last, "model.pth")
 
@@ -104,8 +104,8 @@ if __name__ == '__main__':
         import onnx
         onnx_model = onnx.load("model.onnx")
         meta = onnx_model.metadata_props.add()
-        meta.key = "label_prefix_dict"
-        meta.value = str(dataset.label_prefix_dict).replace("'", '"')
+        meta.key = "prefix_list"
+        meta.value = str(list(dataset.label_prefix_dict.values())).replace("'", '"')
         onnx.save(onnx_model, "model.onnx")
 
         import numpy

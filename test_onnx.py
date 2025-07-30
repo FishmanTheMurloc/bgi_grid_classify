@@ -17,7 +17,7 @@ if __name__ == '__main__':
                 ])
 
     session = onnxruntime.InferenceSession('model.onnx')
-    label_prefix_dict = ast.literal_eval(session.get_modelmeta().custom_metadata_map['label_prefix_dict'])
+    prefix_list = ast.literal_eval(session.get_modelmeta().custom_metadata_map['prefix_list'])
 
     import base64
     import numpy
@@ -41,7 +41,7 @@ if __name__ == '__main__':
             embedding, distance, pred_name, pred_prefix_label, pred_star_num = predict(session, class_prototypes, t, device)
             embeddings.append(embedding.squeeze().detach().cpu().numpy())
 
-            name_predict = label_prefix_dict[pred_prefix_label] + pred_name + '★' * pred_star_num
+            name_predict = prefix_list[pred_prefix_label] + pred_name + '★' * pred_star_num
             print(f'预测是：{name_predict}, {distance}')
 
             pred_dict = {}

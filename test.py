@@ -71,7 +71,7 @@ if __name__ == '__main__':
     model = PrototypicalNetwork()
     model_dicts = torch.load("model.pth", weights_only=True)
     model.load_state_dict(model_dicts["model_state_dict"])
-    label_prefix_dict = model_dicts["label_prefix_dict"]
+    prefix_list = model_dicts["prefix_list"]
     model.to(device)
 
     import base64
@@ -97,7 +97,7 @@ if __name__ == '__main__':
             embedding, distance, pred_name, pred_prefix_label, pred_star_num = predict(model, class_prototypes, t, device)
             embeddings.append(embedding.squeeze().detach().cpu().numpy())
 
-            name_predict = label_prefix_dict[pred_prefix_label] + pred_name + '★' * pred_star_num
+            name_predict = prefix_list[pred_prefix_label] + pred_name + '★' * pred_star_num
             print(f'预测是：{name_predict}, {distance}')
 
             pred_dict = {}
