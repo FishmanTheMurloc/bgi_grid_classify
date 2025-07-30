@@ -13,7 +13,7 @@ if __name__ == '__main__':
     mapper :UMAP = UMAP(n_neighbors=10, n_components=2, random_state=233)
     figure = plt.figure(figsize=(16, 9))
     
-    encoding_array, df = loadFeatureMatrix('模型特征.npy', '模型特征.csv')    
+    encoding_array, df = loadFeatureMatrix('训练集样本特征.npy', '训练集样本特征.csv')    
     encoding_array_pred, df_pred = loadFeatureMatrix('测试集特征.npy', '测试集预测结果.csv')
 
     # 合并进行umap训练(fit)效果会好一些，只用训练集特征进行fit再用测试集特征transform效果较差

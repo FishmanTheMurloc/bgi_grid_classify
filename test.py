@@ -1,14 +1,12 @@
-import os
 import onnxruntime
 import torch
 from torch import nn
-from torch.utils.data import DataLoader
 from torchvision import transforms
 from myDataset import MyDataset
-from myModules import PrototypicalNetwork, compute_class_prototypes
+from myModules import PrototypicalNetwork
 import pandas as pd
 
-def predict(model : nn.Module|onnxruntime.InferenceSession, class_prototypes, image, device):
+def predict(model : nn.Module|onnxruntime.InferenceSession, class_prototypes : dict[str, torch.Tensor], image, device):
     """
     使用 PrototypicalNetwork 和类原型对单张图像进行分类
     Args:
@@ -19,7 +17,7 @@ def predict(model : nn.Module|onnxruntime.InferenceSession, class_prototypes, im
     Returns:
         embedding: 特征向量
         distance: 最近的欧氏距离
-        name_label: 名称标签
+        name: 名称
         prefix_label: 前缀标签
         star_num: 星星数
     """
@@ -43,21 +41,21 @@ def predict(model : nn.Module|onnxruntime.InferenceSession, class_prototypes, im
             raise Exception()
 
     # 计算与每个类原型之间的距离（欧氏距离）
-    distances = {}
-    for label, prototype in class_prototypes.items():
+    distances : dict[str, float] = {}
+    for name, prototype in class_prototypes.items():
         prototype = prototype.to(device)
-        distance = torch.norm(embedding - prototype, p=2)  # 欧氏距离
-        distances[label] = distance.item()
+        distance = torch.linalg.vector_norm(embedding - prototype, ord=2)  # 欧氏距离
+        distances[name] = distance.item()
 
     # 找到距离最小的类别
-    name_label = min(distances, key=distances.get)
+    name = min(distances, key=distances.get)
 
     # 计算prefix_label
     softmax = nn.Softmax(1)
     prefix_label = torch.argmax(softmax(prefix_logist)).item()
     star_num = torch.argmax(softmax(star_logist)).item()
 
-    return embedding, distance, name_label, prefix_label, star_num
+    return embedding, distance, name, prefix_label, star_num
 
 
 if __name__ == '__main__':
@@ -71,21 +69,17 @@ if __name__ == '__main__':
                 ])
 
     model = PrototypicalNetwork()
-    model.load_state_dict(torch.load("model.pth", weights_only=True))
-
-    # 创建 Dataset
-    root_dir = r'爆炒肉片new'
-    file_paths = [os.path.join(root_dir, fname) for fname in os.listdir(root_dir)
-                    if fname.lower().endswith(('.png', '.jpg', '.jpeg'))]
-    dataset = MyDataset(file_paths, transform=transform)
-
-    # 创建 DataLoader
-    batch_size = len(dataset)
-
+    model_dicts = torch.load("model.pth", weights_only=True)
+    model.load_state_dict(model_dicts["model_state_dict"])
+    label_prefix_dict = model_dicts["label_prefix_dict"]
     model.to(device)
 
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    class_prototypes = compute_class_prototypes(model, dataloader, device)
+    import base64
+    import numpy
+    df = pd.read_csv('训练集原型特征.csv')
+    class_prototypes : list[list[str]] = df.values.tolist()
+
+    class_prototypes = {row[0]: torch.tensor(numpy.frombuffer(base64.b64decode(row[1].encode("utf-8")), dtype=numpy.float32), requires_grad=False).to(device) for row in class_prototypes}
     
     df = pd.read_csv('测试集列表.csv', header=None)
     test_set : list[list[str]] = df.values.tolist()
@@ -100,10 +94,10 @@ if __name__ == '__main__':
             print(f'应该是：{name}')
             # 提取特征向量
             embedding : torch.Tensor
-            embedding, distance, pred_name_label, pred_prefix_label, pred_star_num = predict(model, class_prototypes, t, device)
+            embedding, distance, pred_name, pred_prefix_label, pred_star_num = predict(model, class_prototypes, t, device)
             embeddings.append(embedding.squeeze().detach().cpu().numpy())
 
-            name_predict = dataset.label_prefix_dict[pred_prefix_label] + dataset.label_name_dict[pred_name_label] + '★' * pred_star_num
+            name_predict = label_prefix_dict[pred_prefix_label] + pred_name + '★' * pred_star_num
             print(f'预测是：{name_predict}, {distance}')
 
             pred_dict = {}

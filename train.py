@@ -4,7 +4,7 @@ import torch.optim as optim
 from torchvision import transforms
 from myDataset import MyDataset, get_triplets, split_into_train_test
 from myLoss import DualTripletMarginLoss
-from myModules import PrototypicalNetwork
+from myModules import PrototypicalNetwork, compute_class_prototypes
 from torch.utils.data import DataLoader
 
 if __name__ == '__main__':
@@ -23,7 +23,7 @@ if __name__ == '__main__':
     batch_size = len(dataset)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-    num_epochs = 150
+    num_epochs = 100
 
     # 初始化模型、损失函数和优化器
     model = PrototypicalNetwork()
@@ -93,33 +93,51 @@ if __name__ == '__main__':
 
 
     with torch.no_grad():
-        torch.save(model.state_dict(), "model.pth")
+        last = {
+            "model_state_dict": model.state_dict(),
+            "label_prefix_dict": dataset.label_prefix_dict
+        }
+        torch.save(last, "model.pth")
 
         dummy_input = torch.rand(1, 3, 153, 125).to(device)
         torch.onnx.export(model, dummy_input, "model.onnx", input_names=['input'], dynamic_axes={'input' : {0 : 'batch_size'}})
-    
-        import pandas as pd
-        df0 = pd.DataFrame()
-        df0['图像路径'] = [tp[0] for tp in dataset.data]
-        df = pd.DataFrame()
-
-        embeddings = []
-        for t, name_label, prefix_label, star_num in dataset:
-            t = t.to(device)
-            embedding : torch.Tensor
-            embedding, _, _ = model(t.unsqueeze(0))
-            embedding = embedding.squeeze()
-            embeddings.append(embedding.detach().cpu().numpy())
-
-            name = dataset.label_prefix_dict[prefix_label] + dataset.label_name_dict[name_label] + '★' * star_num
-            df = pd.concat([df, pd.DataFrame.from_dict({'标注名称' : name}, orient='index').T], ignore_index=True)
+        import onnx
+        onnx_model = onnx.load("model.onnx")
+        meta = onnx_model.metadata_props.add()
+        meta.key = "label_prefix_dict"
+        meta.value = str(dataset.label_prefix_dict).replace("'", '"')
+        onnx.save(onnx_model, "model.onnx")
 
         import numpy
-        # 保存为本地的 npy 文件
-        numpy.save('模型特征.npy', embeddings)
-    
-        df = pd.concat([df0, df], axis=1)
-        df.to_csv('模型特征.csv', index=False)
+        import pandas as pd
+        import base64
+        df_train = pd.DataFrame()
+        df_train['标注名称'] = [tp[2] + tp[1] + '★' * tp[3] for tp in dataset.data]
+
+        embeddings = []        
+        embeddings_base64 = []
+        dataloader2 = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+        for batch_idx, (images, _, _, _) in enumerate(dataloader2):
+            images = images.to(device)
+            batch_embeddings, _, _ = model(images)
+            batch_embeddings = [e.detach().cpu().numpy() for e in batch_embeddings]
+            batch_embeddings : list[numpy.ndarray]
+            embeddings.extend(batch_embeddings)
+            embeddings_base64.extend([base64.b64encode(eb.tobytes()).decode("utf-8") for eb in batch_embeddings])
+
+        # 保存为本地的 npy 文件，用于对比文件大小
+        numpy.save('训练集样本特征.npy', embeddings)
+
+        # 保存所有样本向量
+        df_train['特征向量'] = embeddings_base64
+        df_train.to_csv('训练集样本特征.csv', index=False)
+
+        # 保存原型向量
+        class_prototypes : dict[int, torch.Tensor] = compute_class_prototypes(model, dataloader, device)
+        df_prot = pd.DataFrame()
+        df_prot['标注名称'] = [dataset.label_name_dict[label] for label in class_prototypes.keys()]
+        df_prot['特征向量'] = [base64.b64encode(t.detach().cpu().numpy().tobytes()).decode("utf-8") for t in class_prototypes.values()]
+        df_prot.to_csv('训练集原型特征.csv', index=False)
 
         df_test = pd.DataFrame([t[0] for t in test_set])
         df_test.to_csv('测试集列表.csv', index=False, header=False)

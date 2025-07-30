@@ -1,10 +1,8 @@
-import os
+import ast
 import torch
-from torch.utils.data import DataLoader
 from torchvision import transforms
 from test import predict
 from myDataset import MyDataset
-from myModules import compute_class_prototypes
 import pandas as pd
 import onnxruntime
 
@@ -18,19 +16,15 @@ if __name__ == '__main__':
                     transforms.ToTensor()
                 ])
 
-    session = onnxruntime.InferenceSession('food.onnx')
+    session = onnxruntime.InferenceSession('model.onnx')
+    label_prefix_dict = ast.literal_eval(session.get_modelmeta().custom_metadata_map['label_prefix_dict'])
 
-    # 创建 Dataset
-    root_dir = r'爆炒肉片new'
-    file_paths = [os.path.join(root_dir, fname) for fname in os.listdir(root_dir)
-                    if fname.lower().endswith(('.png', '.jpg', '.jpeg'))]
-    dataset = MyDataset(file_paths, transform=transform)
+    import base64
+    import numpy
+    df = pd.read_csv('训练集原型特征.csv')
+    class_prototypes : list[list[str]] = df.values.tolist()
 
-    # 创建 DataLoader
-    batch_size = len(dataset)
-
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    class_prototypes = compute_class_prototypes(session, dataloader, device)
+    class_prototypes = {row[0]: torch.tensor(numpy.frombuffer(base64.b64decode(row[1].encode("utf-8")), dtype=numpy.float32), requires_grad=False).to(device) for row in class_prototypes}
     
     df = pd.read_csv('测试集列表.csv', header=None)
     test_set : list[list[str]] = df.values.tolist()
@@ -44,10 +38,10 @@ if __name__ == '__main__':
             print(f'应该是：{name}')
             # 提取特征向量
             embedding : torch.Tensor
-            embedding, distance, pred_name_label, pred_prefix_label, pred_star_num = predict(session, class_prototypes, t, device)
+            embedding, distance, pred_name, pred_prefix_label, pred_star_num = predict(session, class_prototypes, t, device)
             embeddings.append(embedding.squeeze().detach().cpu().numpy())
 
-            name_predict = dataset.label_prefix_dict[pred_prefix_label] + dataset.label_name_dict[pred_name_label] + '★' * pred_star_num
+            name_predict = label_prefix_dict[pred_prefix_label] + pred_name + '★' * pred_star_num
             print(f'预测是：{name_predict}, {distance}')
 
             pred_dict = {}

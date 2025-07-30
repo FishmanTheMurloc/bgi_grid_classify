@@ -65,7 +65,7 @@ def compute_class_prototypes(model : nn.Module|onnxruntime.InferenceSession, dat
     """
     if isinstance(model, nn.Module):
         model.eval()  # 将模型设置为评估模式
-    class_prototypes = {}  # 存储每个类别的原型
+    class_prototypes : dict[int, torch.Tensor] = {}  # 存储每个类别的原型
     class_counts = {}      # 存储每个类别的样本数量
 
     with torch.no_grad():  # 禁用梯度计算

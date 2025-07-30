@@ -1,5 +1,4 @@
 import matplotlib
-from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -47,7 +46,7 @@ if __name__ == '__main__':
     # plt.ylabel('Y轴', fontsize=15)
     # plt.show()
 
-    encoding_array, df = loadFeatureMatrix('模型特征.npy', '模型特征.csv')
+    encoding_array, df = loadFeatureMatrix('训练集样本特征.npy', '训练集样本特征.csv')
     
     mapper :UMAP = UMAP(n_neighbors=10, n_components=2, random_state=233)
     figure = plt.figure(figsize=(16, 9))
@@ -60,5 +59,5 @@ if __name__ == '__main__':
     plt.legend(fontsize=10, markerscale=1, bbox_to_anchor=(1, 1))
     plt.xticks([])
     plt.yticks([])
-    plt.title('模型特征')
+    plt.title('训练集样本特征')
     plt.show()
