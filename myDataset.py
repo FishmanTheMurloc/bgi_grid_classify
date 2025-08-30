@@ -7,7 +7,14 @@ from PIL import Image
 
 class MyDataset(dataset.Dataset):
     label_name_dict : dict
+    '''
+    根据名称标签查找名称的字典
+    '''
     label_prefix_dict : dict
+    '''
+    根据前缀标签查找前缀的字典
+    0: 无前缀, 1: 美味的, 2: 奇怪的
+    '''
 
     def __init__(self, file_paths:list[str], transform):
         if transform:
@@ -18,22 +25,18 @@ class MyDataset(dataset.Dataset):
                     transforms.ToTensor()
                 ])
 
-        self.data = list[tuple[str, str, str]]()
+        self.data = list[tuple]()
         self.name_label_dict = dict[str, int]()
-        self.prefix_label_dict = dict[str, int]()
-        self.prefix_label_dict[''] = 0
+        self.prefix_label_dict : dict[str, int] = {'': 0, '美味的': 1, '奇怪的': 2}
         for file_path in file_paths:
             file_name = os.path.basename(file_path);
             item_full_name = os.path.splitext(file_name)[0] # 去文件扩展名
             prefix, item_name = getPrefix(item_full_name)
-
-            if prefix not in self.prefix_label_dict:
-                self.prefix_label_dict[prefix] = len(self.prefix_label_dict)
         
             item_name, star = getStar(item_name)
             star_num = len(star)
             
-            if item_name not in self.name_label_dict:
+            if item_name not in self.name_label_dict:   # 名称的标签就是从0开始自增啦
                 self.name_label_dict[item_name] = len(self.name_label_dict)
             self.data.append((file_path, item_name, prefix, star_num))
         self.label_name_dict = {v: k for k, v in self.name_label_dict.items()}
@@ -141,13 +144,13 @@ def split_into_train_test(root_dir : str, single_sample_num : int, dual_sample_n
         dual_sample_num: 使用双样本的数量，取出一个做测试，另一个做训练
         triple_sample_num: 使用三样本的数量，取出一个做测试，其余做训练
     Returns:
-        train: 训练集
-        test: 测试集
+        train: 训练集 list[(file_path, name)]
+        test: 测试集 list[(file_path, name)]
     """
     file_names = [fname for fname in os.listdir(root_dir)
                     if fname.lower().endswith(('.png', '.jpg', '.jpeg'))]
 
-    sample_groups = list[list[tuple[str, str]]]()
+    sample_groups = list[tuple[str, list[str]]]()   # list[(name, list[file_path])]
     
     for fname in file_names:
         file_path = os.path.join(root_dir, fname)
@@ -157,41 +160,41 @@ def split_into_train_test(root_dir : str, single_sample_num : int, dual_sample_n
         
         item_name, _ = getStar(item_name)
 
-        group = next((g for g in sample_groups if any(item_name == item[1] for item in g)), None)    # https://www.markheath.net/post/python-equivalents-of-linq-methods
+        group = next((g for g in sample_groups if item_name == g[0]), None)    # https://www.markheath.net/post/python-equivalents-of-linq-methods
         if group:
-            group.append((file_path, item_name))
+            group[1].append(file_path)
         else:
-            group = [(file_path, item_name)]
+            group = (item_name, [file_path])
             sample_groups.append(group)
       
-    train = list[tuple[str, str]]()
+    train = list[tuple[str, str]]() # list[(file_path, name)]
     test = list[tuple[str, str]]()
 
-    single_sample_groups = [g for g in sample_groups if len(g) == 1]
+    single_sample_groups = [g for g in sample_groups if len(g[1]) == 1]
     random.shuffle(single_sample_groups)
     assert len(single_sample_groups) > single_sample_num
-    test += [t for g in single_sample_groups[:single_sample_num] for t in g] # equivalent to SeletMany()
-    train += [t for g in single_sample_groups for t in g]
+    test += [(p, g[0]) for g in single_sample_groups[:single_sample_num] for p in g[1]] # equivalent to SeletMany()
+    train += [(p, g[0]) for g in single_sample_groups for p in g[1]]
 
-    dual_sample_groups = [g for g in sample_groups if len(g) == 2]
+    dual_sample_groups = [g for g in sample_groups if len(g[1]) == 2]
     random.shuffle(dual_sample_groups)
     assert len(dual_sample_groups) > dual_sample_num
     for group in dual_sample_groups[:dual_sample_num]:
-        seleted = group[random.randint(0, 1)]
-        test.append(seleted)
-        group.remove(seleted)
-        train += group
-    train += [t for g in dual_sample_groups[dual_sample_num:] for t in g]
+        seleted = group[1][random.randint(0, 1)]
+        test.append((seleted, group[0]))
+        group[1].remove(seleted)
+        train += [(p, group[0]) for p in group[1]]
+    train += [(p, g[0]) for g in dual_sample_groups[dual_sample_num:] for p in g[1]]
 
-    triple_sample_groups = [g for g in sample_groups if len(g) == 3]
+    triple_sample_groups = [g for g in sample_groups if len(g[1]) == 3]
     random.shuffle(triple_sample_groups)
     assert len(triple_sample_groups) > triple_sample_num
     for group in triple_sample_groups[:triple_sample_num]:
-        seleted = group[random.randint(0, 2)]
-        test.append(seleted)
-        group.remove(seleted)
-        train += group
-    train += [t for g in triple_sample_groups[triple_sample_num:] for t in g]
+        seleted = group[1][random.randint(0, 2)]
+        test.append((seleted, group[0]))
+        group[1].remove(seleted)
+        train += [(p, group[0]) for p in group[1]]
+    train += [(p, g[0]) for g in triple_sample_groups[triple_sample_num:] for p in g[1]]
 
     assert len(single_sample_groups) + len(dual_sample_groups) * 2 + len(triple_sample_groups) * 3 == len(file_names), "难道还有大于3个样本的？"
     assert len(train) + len(test) - single_sample_num == len(file_names)
@@ -199,13 +202,15 @@ def split_into_train_test(root_dir : str, single_sample_num : int, dual_sample_n
     return train, test
     
 if __name__ == '__main__':
+    # ----测试MyDataset读取-----
     root_dir = r'爆炒肉片'
     file_paths = [os.path.join(root_dir, fname) for fname in os.listdir(root_dir)
                     if fname.lower().endswith(('.png', '.jpg', '.jpeg'))]
     dataset = MyDataset(file_paths, None);
     for t, name_label, prefix_label, star_num in dataset:
         print(f'{t.size()}, {name_label}, {prefix_label}, {star_num}')
-
+    
+    # ----测试分割数据集-----
     _, test = split_into_train_test(r'爆炒肉片', 10, 5, 1)
     for sample in test:
         print(f'{sample[1]} => {sample[0]}')
