@@ -67,10 +67,10 @@ if __name__ == '__main__':
                 continue
 
             # 计算损失
-            name_loss, margin = criterion(anchor_embeddings, positive_embeddings, negative_embeddings)
+            name_loss, margin_neg = criterion(anchor_embeddings, positive_embeddings, negative_embeddings)
             prefix_loss = prefix_loss_fn(prefix_logists, prefix_labels)
             star_loss = star_loss_fn(star_logists, star_nums)
-            print(f'NameLoss: {name_loss.item() / len(dataloader):.4f}, Margin: {margin:.4f}, PrefixLoss: {prefix_loss.item() / len(dataloader):.4f}, StarLoss: {star_loss.item() / len(dataloader):.4f}')
+            print(f'NameLoss: {name_loss.item() / len(dataloader):.4f}, Margin: {margin_neg:.4f}, PrefixLoss: {prefix_loss.item() / len(dataloader):.4f}, StarLoss: {star_loss.item() / len(dataloader):.4f}')
             
             loss = 0.4 * name_loss + 0.3 * prefix_loss + 0.3 * star_loss
         

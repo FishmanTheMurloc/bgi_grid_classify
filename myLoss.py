@@ -3,9 +3,14 @@ import torch
 class DualTripletMarginLoss(torch.nn.TripletMarginWithDistanceLoss):
     """
     对于三元组 (anchor, positive, negative)
-    同时要求ap距离和pn距离，使得类内和类间距离都有约束
+    同时要求ap距离和an距离，使得类内和类间距离都有约束
     """
     def __init__(self, margin_pos=0.2, margin_neg=1.0, **kwargs):
+        '''
+        Args:
+            margin_pos: 希望ap距离不超过这个阈值，否则产生损失
+            margin_neg: 希望an距离大于这个阈值，否则产生损失
+        '''
         super().__init__(**kwargs)
         self.margin_pos = margin_pos
         self.margin_neg = margin_neg
