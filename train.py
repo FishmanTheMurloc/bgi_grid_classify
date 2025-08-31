@@ -100,7 +100,7 @@ if __name__ == '__main__':
         torch.save(last, "model.pth")
 
         dummy_input = torch.rand(1, 3, 153, 125).to(device)
-        torch.onnx.export(model, dummy_input, "model.onnx", input_names=['input'], dynamic_axes={'input' : {0 : 'batch_size'}})
+        torch.onnx.export(model, dummy_input, "model.onnx", input_names=['input_image'], output_names=['class_prototypes', 'prefix_logits', 'star_logits'], dynamic_axes={'input_image' : {0 : 'batch_size'}})
         import onnx
         onnx_model = onnx.load("model.onnx")
         meta = onnx_model.metadata_props.add()

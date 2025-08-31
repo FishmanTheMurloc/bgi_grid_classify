@@ -64,6 +64,18 @@
 ## 一些额外处理
 因为预期要放到BetterGI上使用，有必要将模型输出设置为onnx格式，并且须要限制网络参数量。
 
+### 脚本使用方法
+1. 编辑`train.py`，将`root_dir`更改为数据集所在路径，根据样本总量调整`split_into_train_test` 方法的入参，其分别是单、双、三样本放入测试集的数量。 
+	
+	```
+    root_dir = r'爆炒肉片new'
+    train_set, test_set = split_into_train_test(root_dir, 10, 5, 1)
+	```
+	训练过程参数的调整不在此赘述。  
+2. 运行`train.py`，结束后目录下产生的`model.onnx`即为模型，`训练集原型特征.csv`是保存了原型向量的文件。  
+3. 运行`visualizeModel.py`可查看训练样本的UMAP降维可视化图。
+4. 运行`test.py`对测试集进行预测，运行`visualizePred.py`可查看训练样本和预测结果的UMAP降维可视化图。  
+
 
 #### 以下是杂七杂八的备忘：
 ##### 仅导出当前项目使用的包
