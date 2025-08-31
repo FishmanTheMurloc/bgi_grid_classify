@@ -16,12 +16,13 @@ class MyDataset(dataset.Dataset):
     0: 无前缀, 1: 美味的, 2: 奇怪的
     '''
 
-    def __init__(self, file_paths:list[str], transform):
+    def __init__(self, file_paths:list[str], transform = None):
         if transform:
             self.transform = transform
         else:
             self.transform = transforms.Compose([
                     transforms.Resize((153, 125)),
+                    transforms.Lambda(lambda x: x.crop((0, 0, 125, 125))),  # 裁剪左上角的125x125
                     transforms.ToTensor()
                 ])
 
@@ -87,10 +88,10 @@ def get_triplets(embeddings, labels):
     """
     构造三元组 (anchor, positive, negative)
     Args:
-        images: Tensor, shape [batch_size, 3, 153, 125]
+        images: Tensor, shape [batch_size, 3, 125, 125]
         labels: Tensor, shape [batch_size]
     Returns:
-        anchor, positive, negative: 三个 Tensor，形状均为 [num_triplets, 3, 153, 125]
+        anchor, positive, negative: 三个 Tensor，形状均为 [num_triplets, 3, 125, 125]
     """
     anchor_list, positive_list, negative_list = [], [], []
     

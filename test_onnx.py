@@ -10,12 +10,6 @@ if __name__ == '__main__':
     # 检查是否有可用的 GPU
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # 数据预处理
-    transform = transforms.Compose([
-                    transforms.Resize((153, 125)),
-                    transforms.ToTensor()
-                ])
-
     session = onnxruntime.InferenceSession('model.onnx')
     prefix_list = ast.literal_eval(session.get_modelmeta().custom_metadata_map['prefix_list'])
 
@@ -28,7 +22,7 @@ if __name__ == '__main__':
     
     df = pd.read_csv('测试集列表.csv', header=None)
     test_set : list[list[str]] = df.values.tolist()
-    datasetTest = MyDataset([x for row in test_set for x in row], transform=transform)
+    datasetTest = MyDataset([x for row in test_set for x in row])
 
     df_pred = pd.DataFrame()
     embeddings = []

@@ -6,13 +6,13 @@ class PrototypicalNetwork(nn.Module):
     def __init__(self):
         super(PrototypicalNetwork, self).__init__()
         # 简单的卷积网络
-        self.conv1 = nn.Sequential( # [batch_size, 32, 76, 62]
+        self.conv1 = nn.Sequential(
             nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2)
+            nn.MaxPool2d(kernel_size=2, stride=2) # [batch_size, 32, 62, 62]
         )
         self.star_fc = nn.Sequential(
-            nn.AvgPool2d(kernel_size=16, stride=16, padding=(0, 1)),
+            nn.AvgPool2d(kernel_size=16, stride=16, padding=1),
             nn.Flatten(),
             nn.Linear(32 * 4 * 4, 6)
         )
@@ -27,24 +27,24 @@ class PrototypicalNetwork(nn.Module):
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2)
         )
-        # self.fc1 = nn.Linear(128 * 19 * 15, 256)  # 需要根据输入尺寸计算
+        # self.fc1 = nn.Linear(128 * 15 * 15, 256)  # 需要根据输入尺寸计算
         # self.fc2 = nn.Linear(256, 64)  # 输出特征维度
-        self.pool2 = nn.MaxPool2d(kernel_size=3, stride=3)
-        self.fc2 = nn.Linear(128 * 6 * 5, 64)
+        self.pool2 = nn.MaxPool2d(kernel_size=3, stride=3)  # [batch_size, 128, 5, 5]
+        self.fc2 = nn.Linear(128 * 5 * 5, 64)
         self.prefix_fc = nn.Linear(64, 3)
         # self.prefix_lambda = nn.Parameter(torch.tensor(1.0, dtype=torch.float32))
 
     def forward(self, x:torch.Tensor):
-        # 输入 x: [batch_size, 3, 125, 153]
-        x = self.conv1(x)  # [batch_size, 32, 76, 62]
+        # 输入 x: [batch_size, 3, 125, 125]
+        x = self.conv1(x)  # [batch_size, 32, 62, 62]
         star = self.star_fc(x)
-        x = self.conv2(x)  # [batch_size, 64, 38, 31]
-        x = self.conv3(x)  # [batch_size, 128, 19, 15]
+        x = self.conv2(x)  # [batch_size, 64, 31, 31]
+        x = self.conv3(x)  # [batch_size, 128, 15, 15]
         # x = x.view(x.size(0), -1)  # 展平 [batch_size, 128 * 19 * 15]
         # x = nn.functional.relu(self.fc1(x))  # [batch_size, 256]
         # x = self.fc2(x)  # [batch_size, 64]
         # x = nn.functional.pad(x, (0, 0, 0, 1)) # 下方填充1行
-        x = self.pool2(x)
+        x = self.pool2(x)  # [batch_size, 128, 5, 5]
         x = x.view(x.size(0), -1)
         x = self.fc2(x)
         prefix = self.prefix_fc(x)

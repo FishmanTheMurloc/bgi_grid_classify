@@ -8,16 +8,10 @@ from myModules import PrototypicalNetwork, compute_class_prototypes
 from torch.utils.data import DataLoader
 
 if __name__ == '__main__':
-    # 数据预处理
-    transform = transforms.Compose([
-                    transforms.Resize((153, 125)),
-                    transforms.ToTensor()
-                ])
-
     # 创建 Dataset
     root_dir = r'爆炒肉片new'
     train_set, test_set = split_into_train_test(root_dir, 10, 5, 1)
-    dataset = MyDataset([t[0] for t in train_set], transform=transform)
+    dataset = MyDataset([t[0] for t in train_set])
 
     # 创建 DataLoader
     batch_size = len(dataset)
@@ -99,7 +93,7 @@ if __name__ == '__main__':
         }
         torch.save(last, "model.pth")
 
-        dummy_input = torch.rand(1, 3, 153, 125).to(device)
+        dummy_input = torch.rand(1, 3, 125, 125).to(device)
         torch.onnx.export(model, dummy_input, "model.onnx", input_names=['input_image'], output_names=['class_prototypes', 'prefix_logits', 'star_logits'], dynamic_axes={'input_image' : {0 : 'batch_size'}})
         import onnx
         onnx_model = onnx.load("model.onnx")

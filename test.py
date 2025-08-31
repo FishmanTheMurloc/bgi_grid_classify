@@ -12,7 +12,7 @@ def predict(model : nn.Module|onnxruntime.InferenceSession, class_prototypes : d
     Args:
         model: 训练好的 PrototypicalNetwork 模型
         class_prototypes: 类原型字典
-        image: 待预测的图像（形状为 [3, 125, 153]）
+        image: 待预测的图像（形状为 [3, 125, 125]）
         device: 设备（'cuda' 或 'cpu'）
     Returns:
         embedding: 特征向量
@@ -24,7 +24,7 @@ def predict(model : nn.Module|onnxruntime.InferenceSession, class_prototypes : d
     if isinstance(model, nn.Module):
         model.eval()  # 将模型设置为评估模式
 
-    # 将图像包装为 batch（形状从 [3, 125, 153] 变为 [1, 3, 125, 153]）
+    # 将图像包装为 batch（形状从 [3, 125, 125] 变为 [1, 3, 125, 125]）
     image = image.unsqueeze(0).to(device)
 
     # 提取特征向量
@@ -62,12 +62,6 @@ if __name__ == '__main__':
     # 检查是否有可用的 GPU
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # 数据预处理
-    transform = transforms.Compose([
-                    transforms.Resize((153, 125)),
-                    transforms.ToTensor()
-                ])
-
     model = PrototypicalNetwork()
     model_dicts = torch.load("model.pth", weights_only=True)
     model.load_state_dict(model_dicts["model_state_dict"])
@@ -83,7 +77,7 @@ if __name__ == '__main__':
     
     df = pd.read_csv('测试集列表.csv', header=None)
     test_set : list[list[str]] = df.values.tolist()
-    datasetTest = MyDataset([x for row in test_set for x in row], transform=transform)
+    datasetTest = MyDataset([x for row in test_set for x in row])
     model.eval()
 
     df_pred = pd.DataFrame()
