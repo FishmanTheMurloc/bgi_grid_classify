@@ -1,7 +1,6 @@
 import onnxruntime
 import torch
 from torch import nn
-from torchvision import transforms
 from myDataset import MyDataset
 from myModules import PrototypicalNetwork
 import pandas as pd

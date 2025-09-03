@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torchvision import transforms
 from myDataset import MyDataset, get_triplets, split_into_train_test
 from myLoss import DualTripletMarginLoss
 from myModules import PrototypicalNetwork, compute_class_prototypes

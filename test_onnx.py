@@ -1,6 +1,5 @@
 import ast
 import torch
-from torchvision import transforms
 from test import predict
 from myDataset import MyDataset
 import pandas as pd

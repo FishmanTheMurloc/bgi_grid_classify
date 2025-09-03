@@ -21,7 +21,8 @@ class MyDataset(dataset.Dataset):
             self.transform = transform
         else:
             self.transform = transforms.Compose([
-                    transforms.Resize((153, 125)),
+                    transforms.Lambda(self.conditional_resize),
+                    # transforms.Resize((153, 125)),
                     transforms.Lambda(lambda x: x.crop((0, 0, 125, 125))),  # 裁剪左上角的125x125
                     transforms.ToTensor()
                 ])
@@ -54,6 +55,12 @@ class MyDataset(dataset.Dataset):
     def __len__(self):
         return len(self.data)
 
+    def conditional_resize(self, img):
+        width, height = img.size    
+        if width == 125 and height == 125:
+            return img
+        else:
+            return transforms.functional.resize(img, (153, 125))
 
 
 def getPrefix(item_name : str) -> tuple[str, str]:

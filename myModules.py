@@ -12,9 +12,9 @@ class PrototypicalNetwork(nn.Module):
             nn.MaxPool2d(kernel_size=2, stride=2) # [batch_size, 32, 62, 62]
         )
         self.star_fc = nn.Sequential(
-            nn.AvgPool2d(kernel_size=16, stride=16, padding=1),
+            nn.AvgPool2d(kernel_size=(10, 6), stride=(10, 6)),
             nn.Flatten(),
-            nn.Linear(32 * 4 * 4, 6)
+            nn.Linear(32 * 10, 6)
         )
         # self.star_lambda = nn.Parameter(torch.tensor(1.0, dtype=torch.float32))
         self.conv2 = nn.Sequential(
@@ -37,7 +37,9 @@ class PrototypicalNetwork(nn.Module):
     def forward(self, x:torch.Tensor):
         # 输入 x: [batch_size, 3, 125, 125]
         x = self.conv1(x)  # [batch_size, 32, 62, 62]
-        star = self.star_fc(x)
+        # 截取底部区域给star层
+        bottom_crop = x[:, :, -10:, 1:61]   # [32, 10, 60]
+        star = self.star_fc(bottom_crop)
         x = self.conv2(x)  # [batch_size, 64, 31, 31]
         x = self.conv3(x)  # [batch_size, 128, 15, 15]
         # x = x.view(x.size(0), -1)  # 展平 [batch_size, 128 * 19 * 15]
