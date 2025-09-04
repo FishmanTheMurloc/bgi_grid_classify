@@ -24,9 +24,11 @@ if __name__ == '__main__':
     criterion = DualTripletMarginLoss(margin_pos=3, margin_neg=10)  # 修改的三元组损失函数
     prefix_loss_fn = nn.CrossEntropyLoss();
     star_loss_fn = nn.CrossEntropyLoss();
+    is_food_loss_fn = torch.nn.functional.binary_cross_entropy;
     optimizer = optim.Adam([
         {'params' : model.conv1.parameters()},
         {'params' : model.star_fc.parameters(), 'lr' : 1e-1},
+        {'params' : model.is_food_detector.parameters(), 'lr' : 1e-1},
         {'params' : model.conv2.parameters()},
         {'params' : model.conv3.parameters()},
         {'params' : model.fc2.parameters()},
@@ -45,11 +47,11 @@ if __name__ == '__main__':
         model.train()
         running_loss = 0.0
 
-        for batch_idx, (images, name_labels, prefix_labels, star_nums) in enumerate(dataloader):
-            images, name_labels, prefix_labels, star_nums = images.to(device), name_labels.to(device), prefix_labels.to(device), star_nums.to(device)
+        for batch_idx, (images, name_labels, prefix_labels, star_nums, is_food) in enumerate(dataloader):
+            images, name_labels, prefix_labels, star_nums, is_food = images.to(device), name_labels.to(device), prefix_labels.to(device), star_nums.to(device), is_food.to(device)
         
             # 前向传播
-            embeddings, prefix_logists, star_logists = model(images)
+            embeddings, prefix_logists, star_logists, is_food_prob = model(images)
 
             # 手动构造三元组
             anchor_embeddings, positive_embeddings, negative_embeddings = get_triplets(embeddings, name_labels)
@@ -61,11 +63,15 @@ if __name__ == '__main__':
 
             # 计算损失
             name_loss, margin_neg = criterion(anchor_embeddings, positive_embeddings, negative_embeddings)
-            prefix_loss = prefix_loss_fn(prefix_logists, prefix_labels)
+            if is_food.any():
+                prefix_loss = prefix_loss_fn(prefix_logists[is_food], prefix_labels[is_food])
+            else:
+                prefix_loss = torch.tensor(0.0)
             star_loss = star_loss_fn(star_logists, star_nums)
-            print(f'NameLoss: {name_loss.item() / len(dataloader):.4f}, Margin: {margin_neg:.4f}, PrefixLoss: {prefix_loss.item() / len(dataloader):.4f}, StarLoss: {star_loss.item() / len(dataloader):.4f}')
+            is_food_loss = is_food_loss_fn(is_food_prob, is_food.float())
+            print(f'NameLoss: {name_loss.item() / len(dataloader):.4f}, Margin: {margin_neg:.4f}, PrefixLoss: {prefix_loss.item() / len(dataloader):.4f}, StarLoss: {star_loss.item() / len(dataloader):.4f}, IsFoodLoss: {is_food_loss.item() / len(dataloader):.4f}')
             
-            loss = 0.4 * name_loss + 0.3 * prefix_loss + 0.3 * star_loss
+            loss = 0.5 * name_loss + 0.2 * prefix_loss + 0.2 * star_loss + 0.1 * is_food_loss
         
             # 反向传播和优化
             optimizer.zero_grad()
@@ -93,7 +99,7 @@ if __name__ == '__main__':
         torch.save(last, "model.pth")
 
         dummy_input = torch.rand(1, 3, 125, 125).to(device)
-        torch.onnx.export(model, dummy_input, "model.onnx", input_names=['input_image'], output_names=['class_prototypes', 'prefix_logits', 'star_logits'], dynamic_axes={'input_image' : {0 : 'batch_size'}})
+        torch.onnx.export(model, dummy_input, "model.onnx", input_names=['input_image'], output_names=['class_prototypes', 'prefix_logits', 'star_logits', 'is_food_prob'], dynamic_axes={'input_image' : {0 : 'batch_size'}})
         import onnx
         onnx_model = onnx.load("model.onnx")
         meta = onnx_model.metadata_props.add()
@@ -110,9 +116,9 @@ if __name__ == '__main__':
         embeddings = []        
         embeddings_base64 = []
         dataloader2 = DataLoader(dataset, batch_size=batch_size, shuffle=False)
-        for batch_idx, (images, _, _, _) in enumerate(dataloader2):
+        for batch_idx, (images, _, _, _, _) in enumerate(dataloader2):
             images = images.to(device)
-            batch_embeddings, _, _ = model(images)
+            batch_embeddings, _, _, _ = model(images)
             batch_embeddings = [e.detach().cpu().numpy() for e in batch_embeddings]
             batch_embeddings : list[numpy.ndarray]
             embeddings.extend(batch_embeddings)

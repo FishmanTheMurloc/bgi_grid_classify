@@ -26,16 +26,16 @@ if __name__ == '__main__':
     df_pred = pd.DataFrame()
     embeddings = []
     with torch.no_grad():
-        for t, name_label, prefix_label, star_num in datasetTest:
+        for t, name_label, prefix_label, star_num, is_food in datasetTest:
             name = datasetTest.label_prefix_dict[prefix_label] + datasetTest.label_name_dict[name_label] + '★' * star_num
-            print(f'应该是：{name}')
+            print(f'应该是：{name}, 是否食物：{is_food}')
             # 提取特征向量
             embedding : torch.Tensor
-            embedding, distance, pred_name, pred_prefix_label, pred_star_num = predict(session, class_prototypes, t, device)
+            embedding, distance, pred_name, pred_prefix_label, pred_star_num, pred_is_food_prob = predict(session, class_prototypes, t, device)
             embeddings.append(embedding.squeeze().detach().cpu().numpy())
 
             name_predict = prefix_list[pred_prefix_label] + pred_name + '★' * pred_star_num
-            print(f'预测是：{name_predict}, {distance}')
+            print(f'预测是：{name_predict}, {distance}, 是否食物：{pred_is_food_prob > 0.5}({pred_is_food_prob:4f})')
 
             pred_dict = {}
             pred_dict['标注名称'] = name

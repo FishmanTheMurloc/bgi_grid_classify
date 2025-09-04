@@ -4,6 +4,7 @@ from torch.utils.data import dataset
 from torchvision import transforms
 from torch import Tensor
 from PIL import Image
+import pathlib
 
 class MyDataset(dataset.Dataset):
     label_name_dict : dict
@@ -31,26 +32,30 @@ class MyDataset(dataset.Dataset):
         self.name_label_dict = dict[str, int]()
         self.prefix_label_dict : dict[str, int] = {'': 0, '美味的': 1, '奇怪的': 2}
         for file_path in file_paths:
-            file_name = os.path.basename(file_path);
-            item_full_name = os.path.splitext(file_name)[0] # 去文件扩展名
-            prefix, item_name = getPrefix(item_full_name)
+            path_obj = pathlib.Path(file_path)
+
+            first_subdir = path_obj.parts[1] if len(path_obj.parts) > 2 else None   # 第一级子文件夹名
+            game_source_name = getGameSourceName(first_subdir)
+            is_food = game_source_name == 'Food'
+
+            prefix, item_name = getPrefix(path_obj.stem)
         
             item_name, star = getStar(item_name)
             star_num = len(star)
             
             if item_name not in self.name_label_dict:   # 名称的标签就是从0开始自增啦
                 self.name_label_dict[item_name] = len(self.name_label_dict)
-            self.data.append((file_path, item_name, prefix, star_num))
+            self.data.append((file_path, item_name, prefix, star_num, is_food))
         self.label_name_dict = {v: k for k, v in self.name_label_dict.items()}
         self.label_prefix_dict = {v: k for k, v in self.prefix_label_dict.items()}
 
-    def __getitem__(self, index) -> tuple[Tensor, str, str|None]:
-        file_path, item_name, prefix, star_num = self.data[index]
+    def __getitem__(self, index) -> tuple[Tensor, str, str, str, bool]:
+        file_path, item_name, prefix, star_num, is_food = self.data[index]
 
         image = Image.open(file_path).convert('RGB')
         tensor = self.transform(image)
 
-        return tensor, self.name_label_dict[item_name], self.prefix_label_dict[prefix], star_num
+        return tensor, self.name_label_dict[item_name], self.prefix_label_dict[prefix], star_num, is_food
 
     def __len__(self):
         return len(self.data)
@@ -90,6 +95,36 @@ def getStar(item_name : str) -> tuple[str, str]:
     star = item_name[len(without_star):]
     return without_star, star
 
+def getGameSourceName(folder_name : str|None) -> str|None:
+    """
+    获取文件夹名中的游戏来源名
+    """
+    if not folder_name:
+        return None
+    elif folder_name.startswith('Weapons'):
+        return 'Weapons'
+    elif folder_name.startswith('Artifacts'):
+        return 'Artifacts'
+    elif folder_name.startswith('CharacterDevelopmentItems'):
+        return 'CharacterDevelopmentItems'
+    elif folder_name.startswith('Food'):
+        return 'Food'
+    elif folder_name.startswith('Materials'):
+        return 'Materials'
+    elif folder_name.startswith('Gadget'):
+        return 'Gadget'
+    elif folder_name.startswith('Quest'):
+        return 'Quest'
+    elif folder_name.startswith('PreciousItems'):
+        return 'PreciousItems'
+    elif folder_name.startswith('Furnishings'):
+        return 'Furnishings'
+    elif folder_name.startswith('ArtifactSalvage'):
+        return 'ArtifactSalvage'
+    elif folder_name.startswith('ArtifactSetFilter'):
+        return 'ArtifactSetFilter'
+    else:
+        return None
 
 def get_triplets(embeddings, labels):
     """
@@ -155,13 +190,12 @@ def split_into_train_test(root_dir : str, single_sample_num : int, dual_sample_n
         train: 训练集 list[(file_path, name)]
         test: 测试集 list[(file_path, name)]
     """
-    file_names = [fname for fname in os.listdir(root_dir)
-                    if fname.lower().endswith(('.png', '.jpg', '.jpeg'))]
+    file_paths = [str(file) for file in pathlib.Path(root_dir).rglob('*.png')]
 
     sample_groups = list[tuple[str, list[str]]]()   # list[(name, list[file_path])]
     
-    for fname in file_names:
-        file_path = os.path.join(root_dir, fname)
+    for file_path in file_paths:
+        fname = os.path.basename(file_path)
 
         item_full_name = os.path.splitext(fname)[0] # 去文件扩展名
         _, item_name = getPrefix(item_full_name)
@@ -204,24 +238,24 @@ def split_into_train_test(root_dir : str, single_sample_num : int, dual_sample_n
         train += [(p, group[0]) for p in group[1]]
     train += [(p, g[0]) for g in triple_sample_groups[triple_sample_num:] for p in g[1]]
 
-    assert len(single_sample_groups) + len(dual_sample_groups) * 2 + len(triple_sample_groups) * 3 == len(file_names), "难道还有大于3个样本的？"
-    assert len(train) + len(test) - single_sample_num == len(file_names)
+    assert len(single_sample_groups) + len(dual_sample_groups) * 2 + len(triple_sample_groups) * 3 == len(file_paths), "难道还有大于3个样本的？"
+    assert len(train) + len(test) - single_sample_num == len(file_paths)
 
     return train, test
     
 if __name__ == '__main__':
     # ----测试MyDataset读取-----
-    root_dir = r'爆炒肉片'
+    root_dir = r'爆炒肉片new'
     file_paths = [os.path.join(root_dir, fname) for fname in os.listdir(root_dir)
                     if fname.lower().endswith(('.png', '.jpg', '.jpeg'))]
     dataset = MyDataset(file_paths, None);
-    for t, name_label, prefix_label, star_num in dataset:
-        print(f'{t.size()}, {name_label}, {prefix_label}, {star_num}')
+    for t, name_label, prefix_label, star_num, is_food in dataset:
+        print(f'{t.size()}, {name_label}, {prefix_label}, {star_num}, {is_food}')
     
     # ----测试分割数据集-----
-    _, test = split_into_train_test(r'爆炒肉片', 10, 5, 1)
+    _, test = split_into_train_test(r'爆炒肉片new', 10, 5, 1)
     for sample in test:
         print(f'{sample[1]} => {sample[0]}')
     dataset = MyDataset([t[0] for t in test], None);
-    for t, name_label, prefix_label, star_num in dataset:
-        print(f'{t.size()}, {name_label}, {prefix_label}, {star_num}')
+    for t, name_label, prefix_label, star_num, is_food in dataset:
+        print(f'{t.size()}, {name_label}, {prefix_label}, {star_num}, {is_food}')

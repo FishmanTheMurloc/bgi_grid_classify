@@ -29,13 +29,14 @@ def predict(model : nn.Module|onnxruntime.InferenceSession, class_prototypes : d
     # 提取特征向量
     with torch.no_grad():
         if isinstance(model, nn.Module):
-            embedding, prefix_logist, star_logist = model(image)  # [1, 64]
+            embedding, prefix_logist, star_logist, is_food = model(image)  # [1, 64]
         elif isinstance(model, onnxruntime.InferenceSession):
             input_names = [i.name for i in model.get_inputs()]
-            embedding, prefix_logist, star_logist = model.run(None, {input_names[0] : image.detach().cpu().numpy()})  # [1, 64]
+            embedding, prefix_logist, star_logist, is_food = model.run(None, {input_names[0] : image.detach().cpu().numpy()})  # [1, 64]
             embedding = torch.from_numpy(embedding).to(device)
             prefix_logist = torch.from_numpy(prefix_logist).to(device)
             star_logist = torch.from_numpy(star_logist).to(device)
+            is_food = torch.from_numpy(is_food).to(device)
         else:
             raise Exception()
 
@@ -53,8 +54,9 @@ def predict(model : nn.Module|onnxruntime.InferenceSession, class_prototypes : d
     softmax = nn.Softmax(1)
     prefix_label = torch.argmax(softmax(prefix_logist)).item()
     star_num = torch.argmax(softmax(star_logist)).item()
+    is_food = is_food.item()
 
-    return embedding, distance, name, prefix_label, star_num
+    return embedding, distance, name, prefix_label, star_num, is_food
 
 
 if __name__ == '__main__':
@@ -82,16 +84,16 @@ if __name__ == '__main__':
     df_pred = pd.DataFrame()
     embeddings = []
     with torch.no_grad():
-        for t, name_label, prefix_label, star_num in datasetTest:
+        for t, name_label, prefix_label, star_num, is_food in datasetTest:
             name = datasetTest.label_prefix_dict[prefix_label] + datasetTest.label_name_dict[name_label] + '★' * star_num
-            print(f'应该是：{name}')
+            print(f'应该是：{name}, 是否食物：{is_food}')
             # 提取特征向量
             embedding : torch.Tensor
-            embedding, distance, pred_name, pred_prefix_label, pred_star_num = predict(model, class_prototypes, t, device)
+            embedding, distance, pred_name, pred_prefix_label, pred_star_num, pred_is_food_prob = predict(model, class_prototypes, t, device)
             embeddings.append(embedding.squeeze().detach().cpu().numpy())
 
             name_predict = prefix_list[pred_prefix_label] + pred_name + '★' * pred_star_num
-            print(f'预测是：{name_predict}, {distance}')
+            print(f'预测是：{name_predict}, {distance}, 是否食物：{pred_is_food_prob > 0.5}({pred_is_food_prob:4f})')
 
             pred_dict = {}
             pred_dict['标注名称'] = name

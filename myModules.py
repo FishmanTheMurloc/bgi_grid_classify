@@ -12,11 +12,17 @@ class PrototypicalNetwork(nn.Module):
             nn.MaxPool2d(kernel_size=2, stride=2) # [batch_size, 32, 62, 62]
         )
         self.star_fc = nn.Sequential(
-            nn.AvgPool2d(kernel_size=(10, 6), stride=(10, 6)),
+            nn.AvgPool2d(kernel_size=(10, 6), stride=(10, 6)),  # [32, 10, 60] -> [32, 1, 10]
             nn.Flatten(),
             nn.Linear(32 * 10, 6)
         )
         # self.star_lambda = nn.Parameter(torch.tensor(1.0, dtype=torch.float32))
+        self.is_food_detector = nn.Sequential(
+            nn.AvgPool2d(kernel_size=2, stride=2),  # [32, 16, 16] -> [32, 8, 8]
+            nn.Flatten(),
+            nn.Linear(32 * 8 * 8, 1),
+            nn.Sigmoid()
+        )
         self.conv2 = nn.Sequential(
             nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
@@ -40,6 +46,9 @@ class PrototypicalNetwork(nn.Module):
         # 截取底部区域给star层
         bottom_crop = x[:, :, -10:, 1:61]   # [32, 10, 60]
         star = self.star_fc(bottom_crop)
+        top_left_crop = x[:, :, :16, :16]   # [32, 16, 16]
+        is_food_prob = self.is_food_detector(top_left_crop).squeeze(1)
+        is_food = is_food_prob > 0.5
         x = self.conv2(x)  # [batch_size, 64, 31, 31]
         x = self.conv3(x)  # [batch_size, 128, 15, 15]
         # x = x.view(x.size(0), -1)  # 展平 [batch_size, 128 * 19 * 15]
@@ -52,7 +61,13 @@ class PrototypicalNetwork(nn.Module):
         prefix = self.prefix_fc(x)
         # x = torch.cat([x, self.prefix_lambda * prefix, self.star_lambda * star], dim=1)
         # x = x.detach()    # 梯度解耦不太适用
-        return x, prefix, star
+        food_only_prefix = torch.where(
+            is_food.unsqueeze(1),   # where自动广播到符合prefix的Nx3
+            prefix,
+            torch.zeros_like(prefix)
+        )   # 如果不是is_food，则返回全零
+
+        return x, food_only_prefix, star, is_food_prob
 
 
 def compute_class_prototypes(model : nn.Module|onnxruntime.InferenceSession, dataloader, device):
@@ -71,16 +86,16 @@ def compute_class_prototypes(model : nn.Module|onnxruntime.InferenceSession, dat
     class_counts = {}      # 存储每个类别的样本数量
 
     with torch.no_grad():  # 禁用梯度计算
-        for images, name_labels, _, _ in dataloader:
+        for images, name_labels, _, _, _ in dataloader:
             images : torch.Tensor
             images, name_labels = images.to(device), name_labels.to(device)
 
             # 提取特征向量
             if isinstance(model, nn.Module):
-                embeddings, _, _ = model(images)  # [batch_size, 64]
+                embeddings, _, _, _ = model(images)  # [batch_size, 64]
             elif isinstance(model, onnxruntime.InferenceSession):
                 input_names = [i.name for i in model.get_inputs()]
-                embeddings, _, _ = model.run(None, {input_names[0] : images.detach().cpu().numpy()})  # [batch_size, 64]
+                embeddings, _, _, _ = model.run(None, {input_names[0] : images.detach().cpu().numpy()})  # [batch_size, 64]
                 embeddings = torch.from_numpy(embeddings).to(device)
             else:
                 raise Exception()
