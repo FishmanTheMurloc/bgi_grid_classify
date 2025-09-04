@@ -238,6 +238,11 @@ def split_into_train_test(root_dir : str, single_sample_num : int, dual_sample_n
         train += [(p, group[0]) for p in group[1]]
     train += [(p, g[0]) for g in triple_sample_groups[triple_sample_num:] for p in g[1]]
 
+    for group in [g for g in sample_groups if len(g[1]) > 3]:
+        print(f'{group[0]}样本数大于3：')
+        for file_path in group[1]:
+            print(file_path)
+
     assert len(single_sample_groups) + len(dual_sample_groups) * 2 + len(triple_sample_groups) * 3 == len(file_paths), "难道还有大于3个样本的？"
     assert len(train) + len(test) - single_sample_num == len(file_paths)
 
