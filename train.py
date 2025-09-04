@@ -24,7 +24,7 @@ if __name__ == '__main__':
     criterion = DualTripletMarginLoss(margin_pos=3, margin_neg=10)  # 修改的三元组损失函数
     prefix_loss_fn = nn.CrossEntropyLoss();
     star_loss_fn = nn.CrossEntropyLoss();
-    is_food_loss_fn = torch.nn.functional.binary_cross_entropy;
+    is_food_loss_fn = torch.nn.functional.binary_cross_entropy_with_logits;
     optimizer = optim.Adam([
         {'params' : model.conv1.parameters()},
         {'params' : model.star_fc.parameters(), 'lr' : 1e-1},
@@ -51,7 +51,7 @@ if __name__ == '__main__':
             images, name_labels, prefix_labels, star_nums, is_food = images.to(device), name_labels.to(device), prefix_labels.to(device), star_nums.to(device), is_food.to(device)
         
             # 前向传播
-            embeddings, prefix_logists, star_logists, is_food_prob = model(images)
+            embeddings, prefix_logists, star_logists, is_food_logists = model(images)
 
             # 手动构造三元组
             anchor_embeddings, positive_embeddings, negative_embeddings = get_triplets(embeddings, name_labels)
@@ -68,7 +68,7 @@ if __name__ == '__main__':
             else:
                 prefix_loss = torch.tensor(0.0)
             star_loss = star_loss_fn(star_logists, star_nums)
-            is_food_loss = is_food_loss_fn(is_food_prob, is_food.float())
+            is_food_loss = is_food_loss_fn(is_food_logists, is_food.float())
             print(f'NameLoss: {name_loss.item() / len(dataloader):.4f}, Margin: {margin_neg:.4f}, PrefixLoss: {prefix_loss.item() / len(dataloader):.4f}, StarLoss: {star_loss.item() / len(dataloader):.4f}, IsFoodLoss: {is_food_loss.item() / len(dataloader):.4f}')
             
             loss = 0.5 * name_loss + 0.2 * prefix_loss + 0.2 * star_loss + 0.1 * is_food_loss

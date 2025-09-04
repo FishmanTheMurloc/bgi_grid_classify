@@ -135,48 +135,91 @@ def get_triplets(embeddings, labels):
     Returns:
         anchor, positive, negative: 三个 Tensor，形状均为 [num_triplets, 3, 125, 125]
     """
-    anchor_list, positive_list, negative_list = [], [], []
+    positive_list, negative_list = [], []
     
     # 计算 pairwise 距离矩阵（欧氏距离平方）
     pairwise_dist = torch.cdist(embeddings, embeddings, p=2) ** 2  # (batch_size, batch_size)
 
+    # positive_indice1s = []
+    # for i in range(len(labels)):
+    #     positive_indice1s.append([j for j in range(len(labels)) if labels[j] == labels[i] and j != i])
+    label_matrix = labels.unsqueeze(1) == labels.unsqueeze(0)
+    positive_mask = label_matrix.fill_diagonal_(False)  # 排除自己
+    positive_indices = [torch.where(mask)[0].tolist() for mask in positive_mask]
+    
+    # negative_indices = []
+    # for i in range(len(labels)):
+    #     negative_indices.append([j for j in range(len(labels)) if labels[j] != labels[i]])
+    negative_indices = [(~torch.eq(labels, labels[i])).nonzero().flatten().tolist() for i in range(len(labels))]
+    
     # 遍历 batch 中的每个样本
     for i in range(len(labels)):
         anchor_label = labels[i]
 
         # 1. 选择一个 positive 样本（与 anchor 同类别）
-        positive_indices = [j for j in range(len(labels)) if labels[j] == anchor_label and j != i]
-        if not positive_indices:
+        # positive_indices = [j for j in range(len(labels)) if labels[j] == anchor_label and j != i]
+        if not positive_indices[i]:
             # 如果没有 positive 样本（可能只有一个类别的样本），强行设置anchor=positive
             hardest_positive_idx = i
         else:
-            pos_distances = pairwise_dist[i, positive_indices]
-            hardest_positive_idx = positive_indices[torch.argmax(pos_distances)]
+            pos_distances = pairwise_dist[i, positive_indices[i]]
+            hardest_positive_idx = positive_indices[i][torch.argmax(pos_distances)]
         positive_list.append(embeddings[hardest_positive_idx])
 
         # 2. 选择一个 negative 样本（与 anchor 不同类别）
-        negative_indices = [j for j in range(len(labels)) if labels[j] != anchor_label]
-        if not negative_indices:
-            # 如果没有 negative 样本（可能只有一个类别），跳过该 anchor
-            continue
-        neg_distances = pairwise_dist[i, negative_indices]
-        hardest_negative_idx = negative_indices[torch.argmin(neg_distances)]    # 选最难的
+        # negative_indices = [j for j in range(len(labels)) if labels[j] != anchor_label]   # 此句非常耗时
+        if not negative_indices[i]:
+            raise Exception('样本太少了，负样本找不到')
+        neg_distances = pairwise_dist[i, negative_indices[i]]
+        hardest_negative_idx = negative_indices[i][torch.argmin(neg_distances)]    # 选最难的
         negative_list.append(embeddings[hardest_negative_idx])
 
-        # 3. anchor 就是当前样本
-        anchor_list.append(embeddings[i])
-
     # 如果没有找到任何三元组（可能是因为某些类别样本太少），返回空列表
-    if not anchor_list:
+    if not positive_list:
         return None, None, None
 
     # 将列表转换为 Tensor
-    anchors = torch.stack(anchor_list)
+    anchors = embeddings    # anchor 就是当前样本
     positives = torch.stack(positive_list)
     negatives = torch.stack(negative_list)
 
     return anchors, positives, negatives
-
+def get_triplets_f(embeddings, labels):
+    """
+    高效构造三元组 (anchor, positive, negative)
+    Args:
+        embeddings: Tensor, shape [batch_size, embedding_dim]
+        labels: Tensor, shape [batch_size]
+    Returns:
+        anchors, positives, negatives: 三个 Tensor，形状均为 [num_triplets, embedding_dim]
+    """
+    batch_size = embeddings.size(0)
+    
+    # 计算 pairwise 距离矩阵（欧氏距离平方）
+    pairwise_dist = torch.cdist(embeddings, embeddings, p=2) ** 2  # [batch_size, batch_size]
+    
+    # 1. 构造 mask，标记哪些样本是同类（positive）或不同类（negative）
+    label_matrix = labels.unsqueeze(1) == labels.unsqueeze(0)  # [batch_size, batch_size]
+    positive_mask = label_matrix.fill_diagonal_(False)  # 排除自己
+    negative_mask = ~label_matrix
+    
+    # 2. 处理 positive 样本（同类中最远的样本）
+    # 如果没有 positive 样本（如某个类别只有1个样本），则用自己代替
+    pos_distances = pairwise_dist * positive_mask.float()  # 同类样本的距离
+    pos_distances[pos_distances == 0] = -1  # 将非 positive 样本的距离设为 -1
+    hardest_positive_idx = torch.argmax(pos_distances, dim=1)  # [batch_size]
+    
+    # 3. 处理 negative 样本（不同类中最难的样本）
+    neg_distances = pairwise_dist * negative_mask.float()  # 不同类样本的距离
+    neg_distances[neg_distances == 0] = float('inf')  # 将非 negative 样本的距离设为 inf
+    hardest_negative_idx = torch.argmin(neg_distances, dim=1)  # [batch_size]
+    
+    # 4. 收集结果
+    anchors = embeddings
+    positives = embeddings[hardest_positive_idx]
+    negatives = embeddings[hardest_negative_idx]
+    
+    return anchors, positives, negatives
 
 import random
 def split_into_train_test(root_dir : str, single_sample_num : int, dual_sample_num : int, triple_sample_num : int) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:

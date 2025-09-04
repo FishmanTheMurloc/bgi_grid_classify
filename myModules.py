@@ -21,7 +21,7 @@ class PrototypicalNetwork(nn.Module):
             nn.AvgPool2d(kernel_size=2, stride=2),  # [32, 16, 16] -> [32, 8, 8]
             nn.Flatten(),
             nn.Linear(32 * 8 * 8, 1),
-            nn.Sigmoid()
+            nn.Flatten(start_dim=0)
         )
         self.conv2 = nn.Sequential(
             nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
@@ -47,8 +47,8 @@ class PrototypicalNetwork(nn.Module):
         bottom_crop = x[:, :, -10:, 1:61]   # [32, 10, 60]
         star = self.star_fc(bottom_crop)
         top_left_crop = x[:, :, :16, :16]   # [32, 16, 16]
-        is_food_prob = self.is_food_detector(top_left_crop).squeeze(1)
-        is_food = is_food_prob > 0.5
+        is_food_logits = self.is_food_detector(top_left_crop)
+        is_food = torch.sigmoid(is_food_logits) > 0.5
         x = self.conv2(x)  # [batch_size, 64, 31, 31]
         x = self.conv3(x)  # [batch_size, 128, 15, 15]
         # x = x.view(x.size(0), -1)  # 展平 [batch_size, 128 * 19 * 15]
@@ -67,7 +67,7 @@ class PrototypicalNetwork(nn.Module):
             torch.zeros_like(prefix)
         )   # 如果不是is_food，则返回全零
 
-        return x, food_only_prefix, star, is_food_prob
+        return x, food_only_prefix, star, is_food_logits
 
 
 def compute_class_prototypes(model : nn.Module|onnxruntime.InferenceSession, dataloader, device):
